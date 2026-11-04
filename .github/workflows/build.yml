@@ -271,19 +271,10 @@ jobs:
           "$BIN/arm-apple-darwin11-clang" --version
           test -d "$SDK" && echo "iPhoneOS8.4 SDK staged"
           echo "Proving armv7 COMPILE AND LINK"
-          # The wrapper sets COMPILER_PATH to the toolchain bin dir, but clang
-          # on Linux checks the system LLVM bin dir (its InstalledDir) FIRST.
-          # Symlink ld.lld -> ld64 in the system LLVM bin dir so the linker
-          # resolves to the cctools-port ld64 instead of the system ld.bfd.
-          INSTALLED_DIR=$("$BIN/arm-apple-darwin11-clang" --version 2>/dev/null | grep 'InstalledDir' | awk '{print $2}')
-          echo "clang InstalledDir: $INSTALLED_DIR"
-          if [ -n "$INSTALLED_DIR" ] && [ -d "$INSTALLED_DIR" ]; then
-            echo "Symlinking $INSTALLED_DIR/ld.lld -> $BIN/ld64"
-            sudo ln -sf "$BIN/ld64" "$INSTALLED_DIR/ld.lld"
-          fi
           printf 'int main(void){return 0;}\n' > /tmp/ios_link_test.c
           "$BIN/arm-apple-darwin11-clang" \
             -arch armv7 -miphoneos-version-min=5.0 \
+            -Wl,-ld64 \
             -isysroot "$SDK" \
             -o /tmp/ios_link_test /tmp/ios_link_test.c
           "$BIN/arm-apple-darwin11-lipo" -info /tmp/ios_link_test
