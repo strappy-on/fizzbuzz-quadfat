@@ -159,7 +159,7 @@ jobs:
           set -e
           echo "=== Step 5: Build i386 toolchain (osxcross-1.1, MacOSX10.5) ==="
           git clone --branch osxcross-1.1 https://github.com/tpoechtrager/osxcross.git toolchain/osxcross-i386
-          cd toolchain/osxcross-i386 && git log -1 --oneline
+          git -C toolchain/osxcross-i386 log -1 --oneline
           echo "Staging SDK tarball into osxcross/tarballs/"
           mkdir -p toolchain/osxcross-i386/tarballs
           cp sdk/MacOSX10.5.sdk.tar.xz toolchain/osxcross-i386/tarballs/MacOSX10.5.sdk.tar.xz
@@ -197,7 +197,7 @@ jobs:
           set -e
           echo "=== Step 6: Build macOS x86_64+arm64 toolchain (osxcross master, 11.3) ==="
           git clone --branch master https://github.com/tpoechtrager/osxcross.git toolchain/osxcross-mac
-          cd toolchain/osxcross-mac && git log -1 --oneline
+          git -C toolchain/osxcross-mac log -1 --oneline
           echo "Staging SDK tarball into osxcross/tarballs/"
           mkdir -p toolchain/osxcross-mac/tarballs
           cp sdk/MacOSX11.3.sdk.tar.xz toolchain/osxcross-mac/tarballs/MacOSX11.3.sdk.tar.xz
@@ -251,12 +251,13 @@ jobs:
           echo "=== Step 7: Build iOS armv7+arm64 toolchain (cctools-port, iPhoneOS 8.4) ==="
           echo "Cloning cctools-port"
           git clone https://github.com/tpoechtrager/cctools-port.git toolchain/cctools-port
-          cd toolchain/cctools-port && git log -1 --oneline
+          git -C toolchain/cctools-port log -1 --oneline
           echo "Building apple-libtapi (needed for .tbd stubs)"
           git clone --branch 1300.6.5 https://github.com/tpoechtrager/apple-libtapi.git toolchain/apple-libtapi
           cd toolchain/apple-libtapi
           INSTALLPREFIX="$GITHUB_WORKSPACE/toolchain/ios-toolchain" ./build.sh
           INSTALLPREFIX="$GITHUB_WORKSPACE/toolchain/ios-toolchain" ./install.sh
+          cd "$GITHUB_WORKSPACE"
           echo "Building iOS toolchain (armv7 target)"
           cd toolchain/cctools-port
           LLVM_DSYMUTIL=llvm-dsymutil \
