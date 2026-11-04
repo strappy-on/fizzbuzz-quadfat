@@ -271,10 +271,14 @@ jobs:
           "$BIN/arm-apple-darwin11-clang" --version
           test -d "$SDK" && echo "iPhoneOS8.4 SDK staged"
           echo "Proving armv7 COMPILE AND LINK"
+          # clang on Linux has a built-in linker search that looks for "ld"
+          # (for Mach-O targets) via COMPILER_PATH. Rename ld64 -> ld so the
+          # cctools-port linker is found. (The cctools build.sh already
+          # created the arm-apple-darwin11-ld64 prefix; we just need "ld".)
+          cp "$BIN/ld64" "$BIN/ld" 2>/dev/null || true
           printf 'int main(void){return 0;}\n' > /tmp/ios_link_test.c
           "$BIN/arm-apple-darwin11-clang" \
             -arch armv7 -miphoneos-version-min=5.0 \
-            -Wl,-ld64 \
             -isysroot "$SDK" \
             -o /tmp/ios_link_test /tmp/ios_link_test.c
           "$BIN/arm-apple-darwin11-lipo" -info /tmp/ios_link_test
