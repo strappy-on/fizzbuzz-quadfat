@@ -1,0 +1,7 @@
+# Generated output — never commit.
+build/
+dist/
+toolchain/
+*.o
+*.a
+.DS_Store
