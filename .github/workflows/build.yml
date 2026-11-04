@@ -274,6 +274,7 @@ jobs:
           # clang on Ubuntu passes -emulation llvm to the linker (from the
           # target triple). GNU ld rejects this; cctools-port ld64 ignores it.
           # Create a wrapper at /usr/bin/ld64 that filters out -emulation.
+          # Also copy to /usr/bin/ld since clang's built-in search finds "ld" first.
           # shellcheck disable=SC2016
           { echo '#!/bin/bash'
             echo 'args=()'
@@ -290,6 +291,10 @@ jobs:
           sudo cp "$BIN/arm-apple-darwin11-ld" /usr/bin/ld64-real
           sudo cp /tmp/ld64-wrapper.sh /usr/bin/ld64
           sudo chmod +x /usr/bin/ld64
+          # Also replace /usr/bin/ld with the wrapper (clang finds "ld" before "ld64")
+          sudo cp /usr/bin/ld /usr/bin/ld.bak 2>/dev/null || true
+          sudo cp /tmp/ld64-wrapper.sh /usr/bin/ld
+          sudo chmod +x /usr/bin/ld
           printf 'int main(void){return 0;}\n' > /tmp/ios_link_test.c
           "$BIN/arm-apple-darwin11-clang" \
             -arch armv7 -miphoneos-version-min=5.0 \
