@@ -271,10 +271,18 @@ jobs:
           "$BIN/arm-apple-darwin11-clang" --version
           test -d "$SDK" && echo "iPhoneOS8.4 SDK staged"
           echo "Proving armv7 COMPILE AND LINK"
-          # Create ld.lld symlink so clang (which looks for the "llvm" linker
-          # when the target triple is arm-apple-darwin*) finds the cctools-port
-          # ld64 via the COMPILER_PATH set by the wrapper.
-          ln -sf "$BIN/ld64" "$BIN/ld.lld"
+          # The wrapper sets COMPILER_PATH to the toolchain bin dir, but clang
+          # on Linux checks the system LLVM bin dir (/usr/lib/llvm-*) FIRST.
+          # Symlink ld.lld -> ld64 in the system LLVM bin dir so the linker
+          # resolves to the cctools-port ld64 instead of the system ld.bfd.
+          SYSTEM_LLVM_BIN=""
+          for d in /usr/lib/llvm-*/bin; do
+            [ -d "$d" ] && SYSTEM_LLVM_BIN="$d" && break
+          done
+          if [ -n "$SYSTEM_LLVM_BIN" ]; then
+            echo "Symlinking $SYSTEM_LLVM_BIN/ld.lld -> $BIN/ld64"
+            ln -sf "$BIN/ld64" "$SYSTEM_LLVM_BIN/ld.lld"
+          fi
           printf 'int main(void){return 0;}\n' > /tmp/ios_link_test.c
           "$BIN/arm-apple-darwin11-clang" \
             -arch armv7 -miphoneos-version-min=5.0 \
