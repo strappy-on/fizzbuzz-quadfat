@@ -119,12 +119,16 @@ jobs:
           set -e
           echo "=== Step 4: Build PPC toolchain (danupsher cross-compiler-1.0) ==="
           mkdir -p toolchain
-          echo "Downloading $PPC_TARBALL_URL -> toolchain/$PPC_TARBALL"
-          curl -fsSL --retry 3 -o "toolchain/$PPC_TARBALL" "$PPC_TARBALL_URL"
-          ls -l "toolchain/$PPC_TARBALL"
-          echo "Extracting toolchain/$PPC_TARBALL -> toolchain/"
-          tar xzf "toolchain/$PPC_TARBALL" -C toolchain
-          rm -f "toolchain/$PPC_TARBALL"
+          echo "Downloading $PPC_TARBALL_URL -> /tmp/$PPC_TARBALL"
+          curl -fsSL --retry 3 -o "/tmp/$PPC_TARBALL" "$PPC_TARBALL_URL"
+          ls -l "/tmp/$PPC_TARBALL"
+          echo "Extracting /tmp/$PPC_TARBALL -> toolchain/"
+          tar xzf "/tmp/$PPC_TARBALL" -C /tmp
+          rm -f "/tmp/$PPC_TARBALL"
+          # The tarball contains a 'toolchain/' directory; merge its contents
+          # into our toolchain/ dir.
+          cp -r /tmp/toolchain/. toolchain/
+          rm -rf /tmp/toolchain
           ls -l "toolchain"
           echo "Verifying ppc-tiger-gcc"
           chmod +x "toolchain/bin/ppc-tiger-gcc" 2>/dev/null || true
