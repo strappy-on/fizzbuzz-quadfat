@@ -109,15 +109,15 @@ jobs:
         id: ppc-cache
         uses: actions/cache/restore@v4
         with:
-          path: toolchain/ppc-tiger-xcompiler
-          key: ppc-gcc15-xcompiler-1.2
+          path: toolchain
+          key: ppc-cross-compiler-1.0
           fail-on-cache-miss: false
 
-      - name: Build PPC toolchain (danupsher v1.2)
+      - name: Build PPC toolchain (danupsher cross-compiler-1.0)
         if: steps.ppc-cache.outputs.cache-hit != 'true'
         run: |
           set -e
-          echo "=== Step 4: Build PPC toolchain (danupsher v1.2) ==="
+          echo "=== Step 4: Build PPC toolchain (danupsher cross-compiler-1.0) ==="
           mkdir -p toolchain
           echo "Downloading $PPC_TARBALL_URL -> toolchain/$PPC_TARBALL"
           curl -fsSL --retry 3 -o "toolchain/$PPC_TARBALL" "$PPC_TARBALL_URL"
@@ -138,8 +138,8 @@ jobs:
         if: steps.ppc-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: toolchain/ppc-tiger-xcompiler
-          key: ppc-gcc15-xcompiler-1.2
+          path: toolchain
+          key: ppc-cross-compiler-1.0
 
       # -------------------------------------------------------------------
       # 5. Build i386 toolchain (osxcross-1.1, MacOSX10.5 SDK) — cached
