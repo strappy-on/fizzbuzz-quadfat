@@ -287,7 +287,7 @@ jobs:
             echo 'exec "$(dirname "$0")/ld64-real" "${args[@]}"'
           } > /tmp/ld64-wrapper.sh
           chmod +x /tmp/ld64-wrapper.sh
-          sudo cp "$BIN/arm-apple-darwin11-ld64" /usr/bin/ld64-real
+          sudo cp "$BIN/arm-apple-darwin11-ld" /usr/bin/ld64-real
           sudo cp /tmp/ld64-wrapper.sh /usr/bin/ld64
           sudo chmod +x /usr/bin/ld64
           printf 'int main(void){return 0;}\n' > /tmp/ios_link_test.c
