@@ -27,7 +27,7 @@ env:
   # (GCC 7.5 + ld64 + cctools + 10.4u SDK). Has a working assembler.
   PPC_TARBALL_URL: https://github.com/danupsher/tiger-ppc-builds/releases/download/cross-compiler-1.0/ppc-tiger-xcompiler.tar.gz
   PPC_TARBALL: ppc-tiger-xcompiler.tar.gz
-  PPC_INSTALL_DIR: toolchain
+  PPC_INSTALL_DIR: ""
 
 jobs:
   build-and-test:
