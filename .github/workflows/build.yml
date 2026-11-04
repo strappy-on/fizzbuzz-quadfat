@@ -110,7 +110,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: toolchain
-          key: ppc-cross-compiler-1.0
+          key: ppc-cross-compiler-1.0-v2
           fail-on-cache-miss: false
 
       - name: Build PPC toolchain (danupsher cross-compiler-1.0)
@@ -143,7 +143,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: toolchain
-          key: ppc-cross-compiler-1.0
+          key: ppc-cross-compiler-1.0-v2
 
       # -------------------------------------------------------------------
       # 5. Build i386 toolchain (osxcross-1.1, MacOSX10.5 SDK) — cached
