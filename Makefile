@@ -148,16 +148,16 @@ slice-armv7-ios:
 	$(call guard-tool,$(IOS_CC),armv7-ios,IOS_CC)
 	$(call guard-tool,$(IOS_SDK),ios-sdk,IOS_SDK)
 	@mkdir -p $(SLICE_DIR)
-	@echo "== slice armv7-ios: $(IOS_CC) -arch armv7 -miphoneos-version-min=$(IOS_ARMV7_MINOS) -B $(IOS_BIN) -O2 -std=c99 -isysroot $(IOS_SDK) -o $(SLICE_DIR)/fizzbuzz-armv7-ios $(FIZZ_SRC) $(MAIN_SRC)"
-	$(IOS_CC) -arch armv7 -miphoneos-version-min=$(IOS_ARMV7_MINOS) -B $(IOS_BIN) -O2 -std=c99 -Wall -Wextra -isysroot $(IOS_SDK) -o $(SLICE_DIR)/fizzbuzz-armv7-ios $(FIZZ_SRC) $(MAIN_SRC)
+	@echo "== slice armv7-ios: $(IOS_CC) -arch armv7 -miphoneos-version-min=$(IOS_ARMV7_MINOS) -O2 -std=c99 -isysroot $(IOS_SDK) -o $(SLICE_DIR)/fizzbuzz-armv7-ios $(FIZZ_SRC) $(MAIN_SRC)"
+	$(IOS_CC) -arch armv7 -miphoneos-version-min=$(IOS_ARMV7_MINOS) -O2 -std=c99 -Wall -Wextra -isysroot $(IOS_SDK) -o $(SLICE_DIR)/fizzbuzz-armv7-ios $(FIZZ_SRC) $(MAIN_SRC)
 
 # --- arm64 (iOS 7.0) --------------------------------------------------------
 slice-arm64-ios:
 	$(call guard-tool,$(IOS_CC),arm64-ios,IOS_CC)
 	$(call guard-tool,$(IOS_SDK),ios-sdk,IOS_SDK)
 	@mkdir -p $(SLICE_DIR)
-	@echo "== slice arm64-ios: $(IOS_CC) -arch arm64 -miphoneos-version-min=$(IOS_ARM64_MINOS) -B $(IOS_BIN) -O2 -std=c99 -isysroot $(IOS_SDK) -o $(SLICE_DIR)/fizzbuzz-arm64-ios $(FIZZ_SRC) $(MAIN_SRC)"
-	$(IOS_CC) -arch arm64 -miphoneos-version-min=$(IOS_ARM64_MINOS) -B $(IOS_BIN) -O2 -std=c99 -Wall -Wextra -isysroot $(IOS_SDK) -o $(SLICE_DIR)/fizzbuzz-arm64-ios $(FIZZ_SRC) $(MAIN_SRC)
+	@echo "== slice arm64-ios: $(IOS_CC) -arch arm64 -miphoneos-version-min=$(IOS_ARM64_MINOS) -O2 -std=c99 -isysroot $(IOS_SDK) -o $(SLICE_DIR)/fizzbuzz-arm64-ios $(FIZZ_SRC) $(MAIN_SRC)"
+	$(IOS_CC) -arch arm64 -miphoneos-version-min=$(IOS_ARM64_MINOS) -O2 -std=c99 -Wall -Wextra -isysroot $(IOS_SDK) -o $(SLICE_DIR)/fizzbuzz-arm64-ios $(FIZZ_SRC) $(MAIN_SRC)
 
 # ---------------------------------------------------------------------------
 # Fat binaries
