@@ -52,7 +52,7 @@ TEST_SRC   := tests/model_test.c
 #
 # ppc  (danupsher/tiger-ppc-builds v1.3, self-contained, 10.4u SDK inside)
 PPC_XC     ?=
-PPC_CC     ?= $(PPC_XC)/bin/ppc-ld64-gcc
+PPC_CC     ?= $(PPC_XC)/bin/ppc-tiger-gcc
 PPC_SDK    ?= $(PPC_XC)/sdk/MacOSX10.4u.sdk
 PPC_EXTRA  ?= -mmacosx-version-min=10.4
 PPC_MINOS  := 10.4

@@ -24,10 +24,10 @@ on:
 
 env:
   # danupsher/tiger-ppc-builds — self-contained PPC cross compiler
-  # (GCC 15 + ld64 + cctools + 10.4u SDK).
-  PPC_TARBALL_URL: https://github.com/danupsher/tiger-ppc-builds/releases/download/gcc15-xcompiler-1.2/ppc-tiger-gcc15-xcompiler.tar.gz
-  PPC_TARBALL: ppc-tiger-gcc15-xcompiler.tar.gz
-  PPC_INSTALL_DIR: ppc-tiger-xcompiler
+  # (GCC 7.5 + ld64 + cctools + 10.4u SDK). Has a working assembler.
+  PPC_TARBALL_URL: https://github.com/danupsher/tiger-ppc-builds/releases/download/cross-compiler-1.0/ppc-tiger-xcompiler.tar.gz
+  PPC_TARBALL: ppc-tiger-xcompiler.tar.gz
+  PPC_INSTALL_DIR: toolchain
 
 jobs:
   build-and-test:
@@ -127,10 +127,10 @@ jobs:
           tar xzf "toolchain/$PPC_TARBALL" -C toolchain
           rm -f "toolchain/$PPC_TARBALL"
           ls -l "toolchain/$PPC_INSTALL_DIR"
-          echo "Verifying ppc-ld64-gcc"
+          echo "Verifying ppc-tiger-gcc"
+          chmod +x "toolchain/$PPC_INSTALL_DIR/bin/ppc-tiger-gcc" 2>/dev/null || true
           chmod +x "toolchain/$PPC_INSTALL_DIR/bin/ppc-ld64-gcc" 2>/dev/null || true
-          "toolchain/$PPC_INSTALL_DIR/bin/ppc-ld64-gcc" --version
-          "toolchain/$PPC_INSTALL_DIR/bin/ppc-ld64-gcc" -dumpmachine
+          "toolchain/$PPC_INSTALL_DIR/bin/ppc-tiger-gcc" --version 2>&1 | head -1
           test -d "toolchain/$PPC_INSTALL_DIR/sdk/MacOSX10.4u.sdk" \
             && echo "10.4u SDK present"
           echo "PPC toolchain built."
@@ -358,7 +358,7 @@ jobs:
           echo "Discovered: OTOOL=$OTOOL"
           {
             echo "PPC_XC=$PPC_XC"
-            echo "PPC_CC=$PPC_XC/bin/ppc-ld64-gcc"
+            echo "PPC_CC=$PPC_XC/bin/ppc-tiger-gcc"
             echo "PPC_SDK=$PPC_XC/sdk/MacOSX10.4u.sdk"
             echo "I386_CC=$I386_CC"
             echo "I386_SDK=$I386_SDK"
