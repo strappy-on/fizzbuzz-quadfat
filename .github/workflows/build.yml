@@ -279,7 +279,7 @@ jobs:
           echo "clang InstalledDir: $INSTALLED_DIR"
           if [ -n "$INSTALLED_DIR" ] && [ -d "$INSTALLED_DIR" ]; then
             echo "Symlinking $INSTALLED_DIR/ld.lld -> $BIN/ld64"
-            ln -sf "$BIN/ld64" "$INSTALLED_DIR/ld.lld"
+            sudo ln -sf "$BIN/ld64" "$INSTALLED_DIR/ld.lld"
           fi
           printf 'int main(void){return 0;}\n' > /tmp/ios_link_test.c
           "$BIN/arm-apple-darwin11-clang" \
