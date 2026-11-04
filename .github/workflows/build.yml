@@ -271,11 +271,25 @@ jobs:
           "$BIN/arm-apple-darwin11-clang" --version
           test -d "$SDK" && echo "iPhoneOS8.4 SDK staged"
           echo "Proving armv7 COMPILE AND LINK"
-          # clang on Linux has a built-in linker search that looks for "ld"
-          # (for Mach-O targets) via COMPILER_PATH. Rename ld64 -> ld so the
-          # cctools-port linker is found. (The cctools build.sh already
-          # created the arm-apple-darwin11-ld64 prefix; we just need "ld".)
-          cp "$BIN/ld64" "$BIN/ld" 2>/dev/null || true
+          # clang on Ubuntu passes -emulation llvm to the linker (from the
+          # target triple). GNU ld rejects this; cctools-port ld64 ignores it.
+          # Create a wrapper at /usr/bin/ld64 that filters out -emulation.
+          # shellcheck disable=SC2016
+          { echo '#!/bin/bash'
+            echo 'args=()'
+            echo 'while [ $# -gt 0 ]; do'
+            echo '  case "$1" in'
+            echo '    -emulation) shift 2 ;;'
+            echo '    -emulation=*) shift ;;'
+            echo '    *) args+=("$1"); shift ;;'
+            echo '  esac'
+            echo 'done'
+            echo 'exec "$(dirname "$0")/ld64-real" "${args[@]}"'
+          } > /tmp/ld64-wrapper.sh
+          chmod +x /tmp/ld64-wrapper.sh
+          sudo cp "$BIN/ld64" /usr/bin/ld64-real
+          sudo cp /tmp/ld64-wrapper.sh /usr/bin/ld64
+          sudo chmod +x /usr/bin/ld64
           printf 'int main(void){return 0;}\n' > /tmp/ios_link_test.c
           "$BIN/arm-apple-darwin11-clang" \
             -arch armv7 -miphoneos-version-min=5.0 \
