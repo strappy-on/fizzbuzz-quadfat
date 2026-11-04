@@ -274,7 +274,7 @@ jobs:
           printf 'int main(void){return 0;}\n' > /tmp/ios_link_test.c
           "$BIN/arm-apple-darwin11-clang" \
             -arch armv7 -miphoneos-version-min=5.0 \
-            -fuse-ld=ld64 \
+            -B "$BIN" \
             -isysroot "$SDK" \
             -o /tmp/ios_link_test /tmp/ios_link_test.c
           "$BIN/arm-apple-darwin11-lipo" -info /tmp/ios_link_test
@@ -344,6 +344,7 @@ jobs:
             echo "MAC_SDK_NEW=$MAC_SDK"
             echo "IOS_CC=$IOS_CC"
             echo "IOS_SDK=$IOS_SDK"
+            echo "IOS_BIN=$IOS_BIN"
             # Use the legacy osxcross-1.1 lipo (PPC-capable) for fat creation.
             echo "LIPO=$I386_LIPO"
             echo "VTOOL=$VTOOL"
@@ -366,6 +367,7 @@ jobs:
           MAC_SDK_NEW: ${{ steps.paths.outputs.MAC_SDK_NEW }}
           IOS_CC: ${{ steps.paths.outputs.IOS_CC }}
           IOS_SDK: ${{ steps.paths.outputs.IOS_SDK }}
+          IOS_BIN: ${{ steps.paths.outputs.IOS_BIN }}
           LIPO: ${{ steps.paths.outputs.LIPO }}
           VTOOL: ${{ steps.paths.outputs.VTOOL }}
           OTOOL: ${{ steps.paths.outputs.OTOOL }}
