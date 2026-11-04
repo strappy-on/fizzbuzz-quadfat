@@ -212,18 +212,8 @@ validate: mac-fat ios-fat
 		echo "iOS FAT: $(DIST_DIR)/fizzbuzz-ios"; \
 		$(LIPO) -info $(DIST_DIR)/fizzbuzz-ios; \
 		echo ""; \
-		echo "Per-slice minimum OS (LC_VERSION_MIN_* / LC_BUILD_VERSION):"; \
-		for a in ppc i386 x86_64 arm64; do \
-			echo "  mac[$$a]:"; \
-			$(VTOOL) -show $(SLICE_DIR)/fizzbuzz-$$a 2>/dev/null | grep -E 'minos|sdk|version' || \
-			$(OTOOL) -l $(SLICE_DIR)/fizzbuzz-$$a 2>/dev/null | awk '/LC_VERSION_MIN_MACOSX|LC_BUILD_VERSION/{f=1} f&&/version/{print "    ",$$0; f=0}'; \
-		done; \
-		for a in armv7 arm64; do \
-			s=fizzbuzz-$$a-ios; \
-			echo "  ios[$$a]:"; \
-			$(VTOOL) -show $(SLICE_DIR)/$$s 2>/dev/null | grep -E 'minos|sdk|version' || \
-			$(OTOOL) -l $(SLICE_DIR)/$$s 2>/dev/null | awk '/LC_VERSION_MIN_IPHONEOS|LC_BUILD_VERSION/{f=1} f&&/version/{print "    ",$$0; f=0}'; \
-		done; \
+		VTOOL="$(VTOOL)" OTOOL="$(OTOOL)" PPC_XC="$(PPC_XC)" \
+			bash scripts/report_minos.sh $(SLICE_DIR); \
 		echo ""; \
 		echo "Sizes:"; \
 		ls -l $(DIST_DIR)/fizzbuzz-macos $(DIST_DIR)/fizzbuzz-ios; \

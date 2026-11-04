@@ -72,7 +72,7 @@ jobs:
                    "toolchain/$PPC_INSTALL_DIR/bin/ppc-ld64-g++" 2>/dev/null || true
           "toolchain/$PPC_INSTALL_DIR/bin/ppc-ld64-gcc" --version
           "toolchain/$PPC_INSTALL_DIR/bin/ppc-ld64-gcc" -dumpmachine
-          test -f "toolchain/$PPC_INSTALL_DIR/sdk/MacOSX10.4u.sdk" \
+          test -d "toolchain/$PPC_INSTALL_DIR/sdk/MacOSX10.4u.sdk" \
             && echo "10.4u SDK present"
 
       - name: Cache toolchain
@@ -234,16 +234,6 @@ jobs:
           path: toolchain/osxcross-mac-target/SDK/MacOSX11.3.sdk
           if-no-files-found: error
 
-      - name: Publish mac toolchain paths
-        if: always()
-        run: |
-          # The paths are written to GITHUB_OUTPUT by the verify step;
-          # surface them as job outputs so the build job can read them.
-          {
-            echo "X64_CC=${{ steps.verify.outputs.X64_CC }}"
-            echo "ARM_MAC_CC=${{ steps.verify.outputs.ARM_MAC_CC }}"
-          } >> "$GITHUB_OUTPUT"
-
   # =========================================================================
   # 4. iOS toolchain (cctools-port usage_examples/ios_toolchain, 8.4 SDK)
   # =========================================================================
@@ -257,7 +247,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential clang g++ cmake ninja-build \
-            libdispatch-dev libblocksruntime-dev libxml2-dev \
+            libblocksruntime-dev libxml2-dev \
             libssl-dev git curl ca-certificates xz-utils libffi-dev
 
       - name: Clone cctools-port
@@ -498,18 +488,10 @@ jobs:
         env:
           VTOOL: ${{ steps.paths.outputs.VTOOL }}
           OTOOL: ${{ steps.paths.outputs.OTOOL }}
+          PPC_XC: ${{ steps.paths.outputs.PPC_XC }}
         run: |
           set -e
-          for a in ppc i386 x86_64 arm64; do
-            echo "=== mac[$a] ==="
-            "$VTOOL" -show build/slices/fizzbuzz-$a 2>/dev/null \
-              || "$OTOOL" -l build/slices/fizzbuzz-$a | grep -A3 LC_VERSION
-          done
-          for a in armv7 arm64; do
-            echo "=== ios[$a] ==="
-            "$VTOOL" -show build/slices/fizzbuzz-$a-ios 2>/dev/null \
-              || "$OTOOL" -l build/slices/fizzbuzz-$a-ios | grep -A3 LC_VERSION
-          done
+          bash scripts/report_minos.sh build/slices
 
       - name: Upload fizzbuzz-macos
         uses: actions/upload-artifact@v4
