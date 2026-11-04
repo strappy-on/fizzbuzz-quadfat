@@ -2,6 +2,7 @@
 build/
 dist/
 toolchain/
+sdk/
 *.o
 *.a
 .DS_Store

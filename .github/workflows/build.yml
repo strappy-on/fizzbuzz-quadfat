@@ -1,25 +1,18 @@
 #
 # build.yml — FizzBuzz macOS Quad-Fat + iOS FAT builds in GitHub Actions.
 #
-# Job graph (all on ubuntu-latest / x86_64 Linux):
+# Single job: build-and-test
 #
-#   toolchain-ppc  ─┐
-#   toolchain-i386 ─┤
-#   toolchain-mac  ─┼──>  build  ──>  test
-#   toolchain-ios  ─┘
+# The job downloads/extracts/builds all cross-toolchains, compiles the 6
+# slices, lipos the two fat binaries, validates (arch-set assertion +
+# per-slice min-OS), runs the host test, and uploads ONLY the two tiny
+# fat binaries + manifest (no multi-GB toolchain artifacts).
 #
-# Each toolchain job downloads/builds one cross toolchain + its SDK,
-# caches the result, and uploads it as an artifact. The `build` job
-# reassembles all toolchains, runs `make all` (all 6 slices + 2 fat
-# binaries), validates with `make validate`, asserts the exact arch
-# sets, and uploads the fat binaries + manifest. The `test` job runs the
-# host test and re-validates the fat binaries (arch sets, min-OS floors,
-# non-zero size).
-#
-# Required repo secrets (SDK download URLs; values are secret):
-#   ALTIVEC_SDK_MACOS_105_URL    MacOSX10.5.sdk.tar.xz
-#   ALTIVEC_SDK_MACOS_113_URL    MacOSX11.3.sdk.tar.xz
-#   ALTIVEC_SDK_IPHONEOS_84_URL  iPhoneOS8.4.sdk.tar.gz
+# SDK URL resolution: SECRET-PREFERRED, PUBLIC-FALLBACK.
+# The three SDK archives are public GitHub release assets; the secrets
+# (ALTIVEC_SDK_MACOS_105_URL, ALTIVEC_SDK_MACOS_113_URL,
+# ALTIVEC_SDK_IPHONEOS_84_URL) are used if populated, otherwise the
+# public URLs embedded below are used.
 #
 
 name: build
@@ -31,169 +24,192 @@ on:
 
 env:
   # danupsher/tiger-ppc-builds — self-contained PPC cross compiler
-  # (GCC 15 + ld64 + cctools + 10.4u SDK). NOTE: the v1.3 release exposes
-  # only the 3 rebuilt runtime libraries as GitHub assets; the full
-  # compiler tarball is the v1.2 asset (identical 66 MB archive, same
-  # 10.4u SDK, same pipeline). See the `toolchain-ppc` job for details.
+  # (GCC 15 + ld64 + cctools + 10.4u SDK).
   PPC_TARBALL_URL: https://github.com/danupsher/tiger-ppc-builds/releases/download/gcc15-xcompiler-1.2/ppc-tiger-gcc15-xcompiler.tar.gz
   PPC_TARBALL: ppc-tiger-gcc15-xcompiler.tar.gz
   PPC_INSTALL_DIR: ppc-tiger-xcompiler
 
 jobs:
-  # =========================================================================
-  # 1. PPC toolchain (danupsher v1.3, 10.4u SDK bundled)
-  # =========================================================================
-  toolchain-ppc:
-    name: toolchain-ppc (danupsher v1.3, 10.4u)
+  build-and-test:
+    name: build-and-test
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
+      # -------------------------------------------------------------------
+      # 1. Checkout
+      # -------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Announce checkout
+        run: |
+          set -e
+          echo "=== Step 1: Checkout complete ==="
+
+      # -------------------------------------------------------------------
+      # 2. Install all apt dependencies in one shot
+      # -------------------------------------------------------------------
       - name: Install dependencies
         run: |
+          set -e
+          echo "=== Step 2: Install apt dependencies ==="
           sudo apt-get update
-          sudo apt-get install -y python3 curl ca-certificates
+          sudo apt-get install -y \
+            build-essential clang g++ cmake ninja-build \
+            pkg-config libmpc-dev libmpfr-dev libgmp-dev libisl-dev \
+            zlib1g-dev libelf-dev libxml2-dev libssl-dev \
+            libblocksruntime-dev libffi-dev \
+            git curl ca-certificates xz-utils python3 file
+          echo "Dependencies installed."
 
-      - name: Download danupsher PPC cross-compiler tarball
+      # -------------------------------------------------------------------
+      # 3a. Download MacOSX10.5 SDK (secret-preferred, public-fallback)
+      # -------------------------------------------------------------------
+      - name: Download MacOSX10.5 SDK
         run: |
+          set -e
+          echo "=== Step 3a: Download MacOSX10.5 SDK ==="
+          mkdir -p sdk
+          URL="${{ secrets.ALTIVEC_SDK_MACOS_105_URL }}"
+          [ -n "$URL" ] || URL="https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.5.sdk.tar.xz"
+          echo "Using macOS 10.5 SDK URL (length ${#URL})"
+          curl -fsSL --retry 3 -o sdk/MacOSX10.5.sdk.tar.xz "$URL"
+          ls -l sdk/MacOSX10.5.sdk.tar.xz
+
+      # -------------------------------------------------------------------
+      # 3b. Download MacOSX11.3 SDK (secret-preferred, public-fallback)
+      # -------------------------------------------------------------------
+      - name: Download MacOSX11.3 SDK
+        run: |
+          set -e
+          echo "=== Step 3b: Download MacOSX11.3 SDK ==="
+          mkdir -p sdk
+          URL="${{ secrets.ALTIVEC_SDK_MACOS_113_URL }}"
+          [ -n "$URL" ] || URL="https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz"
+          echo "Using macOS 11.3 SDK URL (length ${#URL})"
+          curl -fsSL --retry 3 -o sdk/MacOSX11.3.sdk.tar.xz "$URL"
+          ls -l sdk/MacOSX11.3.sdk.tar.xz
+
+      # -------------------------------------------------------------------
+      # 3c. Download iPhoneOS8.4 SDK (secret-preferred, public-fallback)
+      # -------------------------------------------------------------------
+      - name: Download iPhoneOS8.4 SDK
+        run: |
+          set -e
+          echo "=== Step 3c: Download iPhoneOS8.4 SDK ==="
+          mkdir -p sdk
+          URL="${{ secrets.ALTIVEC_SDK_IPHONEOS_84_URL }}"
+          [ -n "$URL" ] || URL="https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS8.4.sdk.tar.gz"
+          echo "Using iPhoneOS 8.4 SDK URL (length ${#URL})"
+          curl -fsSL --retry 3 -o sdk/iPhoneOS8.4.sdk.tar.gz "$URL"
+          ls -l sdk/iPhoneOS8.4.sdk.tar.gz
+
+      # -------------------------------------------------------------------
+      # 4. Build PPC toolchain (danupsher, public, no secret) — cached
+      # -------------------------------------------------------------------
+      - name: Cache PPC toolchain (restore)
+        id: ppc-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: toolchain/ppc-tiger-xcompiler
+          key: ppc-gcc15-xcompiler-1.2
+          fail-on-cache-miss: false
+
+      - name: Build PPC toolchain (danupsher v1.2)
+        if: steps.ppc-cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          echo "=== Step 4: Build PPC toolchain (danupsher v1.2) ==="
           mkdir -p toolchain
           echo "Downloading $PPC_TARBALL_URL -> toolchain/$PPC_TARBALL"
           curl -fsSL --retry 3 -o "toolchain/$PPC_TARBALL" "$PPC_TARBALL_URL"
           ls -l "toolchain/$PPC_TARBALL"
-
-      - name: Extract
-        run: |
           echo "Extracting toolchain/$PPC_TARBALL -> toolchain/"
           tar xzf "toolchain/$PPC_TARBALL" -C toolchain
+          rm -f "toolchain/$PPC_TARBALL"
           ls -l "toolchain/$PPC_INSTALL_DIR"
-
-      - name: Verify ppc-ld64-gcc
-        run: |
-          chmod +x "toolchain/$PPC_INSTALL_DIR/bin/ppc-ld64-gcc" \
-                   "toolchain/$PPC_INSTALL_DIR/bin/ppc-ld64-g++" 2>/dev/null || true
+          echo "Verifying ppc-ld64-gcc"
+          chmod +x "toolchain/$PPC_INSTALL_DIR/bin/ppc-ld64-gcc" 2>/dev/null || true
           "toolchain/$PPC_INSTALL_DIR/bin/ppc-ld64-gcc" --version
           "toolchain/$PPC_INSTALL_DIR/bin/ppc-ld64-gcc" -dumpmachine
           test -d "toolchain/$PPC_INSTALL_DIR/sdk/MacOSX10.4u.sdk" \
             && echo "10.4u SDK present"
+          echo "PPC toolchain built."
 
-      - name: Cache toolchain
-        if: always()
+      - name: Cache PPC toolchain (save)
+        if: steps.ppc-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: toolchain
-          key: ppc-toolchain-danupsher-v1.3
+          path: toolchain/ppc-tiger-xcompiler
+          key: ppc-gcc15-xcompiler-1.2
 
-      - name: Upload ppc-toolchain artifact
-        uses: actions/upload-artifact@v4
+      # -------------------------------------------------------------------
+      # 5. Build i386 toolchain (osxcross-1.1, MacOSX10.5 SDK) — cached
+      # -------------------------------------------------------------------
+      - name: Cache i386 toolchain (restore)
+        id: i386-cache
+        uses: actions/cache/restore@v4
         with:
-          name: ppc-toolchain
-          path: toolchain
-          if-no-files-found: error
+          path: toolchain/osxcross-i386
+          key: osxcross-i386-1.1-10.5
+          fail-on-cache-miss: false
 
-  # =========================================================================
-  # 2. i386 toolchain (osxcross-1.1, MacOSX10.5 SDK)
-  # =========================================================================
-  toolchain-i386:
-    name: toolchain-i386 (osxcross-1.1, 10.5)
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - name: Install dependencies
+      - name: Build i386 toolchain (osxcross-1.1, MacOSX10.5)
+        if: steps.i386-cache.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential clang cmake ninja-build \
-            libmpc-dev libmpfr-dev libgmp-dev libisl-dev \
-            zlib1g-dev libelf-dev pkg-config git curl ca-certificates xz-utils
-
-      - name: Clone osxcross (branch osxcross-1.1)
-        run: |
+          set -e
+          echo "=== Step 5: Build i386 toolchain (osxcross-1.1, MacOSX10.5) ==="
           git clone --branch osxcross-1.1 https://github.com/tpoechtrager/osxcross.git toolchain/osxcross-i386
           cd toolchain/osxcross-i386 && git log -1 --oneline
-
-      - name: Download MacOSX10.5 SDK
-        run: |
+          echo "Staging SDK tarball into osxcross/tarballs/"
           mkdir -p toolchain/osxcross-i386/tarballs
-          echo "Downloading secret ALTIVEC_SDK_MACOS_105_URL -> toolchain/osxcross-i386/tarballs/MacOSX10.5.sdk.tar.xz"
-          curl -fsSL --retry 3 -o toolchain/osxcross-i386/tarballs/MacOSX10.5.sdk.tar.xz "$ALTIVEC_SDK_MACOS_105_URL"
+          cp sdk/MacOSX10.5.sdk.tar.xz toolchain/osxcross-i386/tarballs/MacOSX10.5.sdk.tar.xz
           ls -l toolchain/osxcross-i386/tarballs/
-
-      - name: Build osxcross-1.1 (TARGET_DIR=toolchain/osxcross-i386-target)
-        run: |
+          echo "Building osxcross-1.1"
           cd toolchain/osxcross-i386
-          UNATTENDED=1 TARGET_DIR="$GITHUB_WORKSPACE/toolchain/osxcross-i386-target" ./build.sh
-          find toolchain/osxcross-i386-target/bin -maxdepth 1 -type f | sort | head -20
-
-      - name: Verify i386-apple-darwin9-clang
-        run: |
-          "$GITHUB_WORKSPACE/toolchain/osxcross-i386-target/bin/i386-apple-darwin9-clang" --version
-          test -d "$GITHUB_WORKSPACE/toolchain/osxcross-i386-target/SDK/MacOSX10.5.sdk" \
+          UNATTENDED=1 TARGET_DIR="$GITHUB_WORKSPACE/toolchain/osxcross-i386" ./build.sh
+          echo "Verifying i386-apple-darwin9-clang"
+          "$GITHUB_WORKSPACE/toolchain/osxcross-i386/bin/i386-apple-darwin9-clang" --version
+          test -d "$GITHUB_WORKSPACE/toolchain/osxcross-i386/SDK/MacOSX10.5.sdk" \
             && echo "10.5 SDK staged in toolchain dir"
+          echo "i386 toolchain built."
 
-      - name: Cache toolchain
-        if: always()
+      - name: Cache i386 toolchain (save)
+        if: steps.i386-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: toolchain/osxcross-i386-target
+          path: toolchain/osxcross-i386
           key: osxcross-i386-1.1-10.5
 
-      - name: Upload i386-toolchain artifact
-        uses: actions/upload-artifact@v4
+      # -------------------------------------------------------------------
+      # 6. Build macOS x86_64+arm64 toolchain (osxcross master stable, 11.3)
+      # -------------------------------------------------------------------
+      - name: Cache macOS toolchain (restore)
+        id: mac-cache
+        uses: actions/cache/restore@v4
         with:
-          name: i386-toolchain
-          path: toolchain/osxcross-i386-target
-          if-no-files-found: error
+          path: toolchain/osxcross-mac
+          key: osxcross-mac-master-stable-11.3
+          fail-on-cache-miss: false
 
-      - name: Upload sdk-10.5 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sdk-10.5
-          path: toolchain/osxcross-i386-target/SDK/MacOSX10.5.sdk
-          if-no-files-found: error
-
-  # =========================================================================
-  # 3. macOS x86_64 + arm64 toolchain (osxcross master "stable", 11.3)
-  # =========================================================================
-  toolchain-mac:
-    name: toolchain-mac (osxcross master stable, 11.3)
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - name: Install dependencies
+      - name: Build macOS toolchain (osxcross master stable, 11.3)
+        if: steps.mac-cache.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential clang cmake ninja-build \
-            libmpc-dev libmpfr-dev libgmp-dev libisl-dev \
-            zlib1g-dev libelf-dev pkg-config git curl ca-certificates xz-utils
-
-      - name: Clone osxcross (branch master)
-        run: |
+          set -e
+          echo "=== Step 6: Build macOS x86_64+arm64 toolchain (osxcross master, 11.3) ==="
           git clone --branch master https://github.com/tpoechtrager/osxcross.git toolchain/osxcross-mac
           cd toolchain/osxcross-mac && git log -1 --oneline
-
-      - name: Download MacOSX11.3 SDK
-        run: |
+          echo "Staging SDK tarball into osxcross/tarballs/"
           mkdir -p toolchain/osxcross-mac/tarballs
-          echo "Downloading secret ALTIVEC_SDK_MACOS_113_URL -> toolchain/osxcross-mac/tarballs/MacOSX11.3.sdk.tar.xz"
-          curl -fsSL --retry 3 -o toolchain/osxcross-mac/tarballs/MacOSX11.3.sdk.tar.xz "$ALTIVEC_SDK_MACOS_113_URL"
+          cp sdk/MacOSX11.3.sdk.tar.xz toolchain/osxcross-mac/tarballs/MacOSX11.3.sdk.tar.xz
           ls -l toolchain/osxcross-mac/tarballs/
-
-      - name: Build osxcross master stable (x86_64 + arm64)
-        run: |
+          echo "Building osxcross master stable (x86_64 + arm64)"
           cd toolchain/osxcross-mac
           UNATTENDED=1 BUILD_FLAVOR=stable \
             ENABLE_ARCHS="x86_64 arm64" \
-            TARGET_DIR="$GITHUB_WORKSPACE/toolchain/osxcross-mac-target" \
+            TARGET_DIR="$GITHUB_WORKSPACE/toolchain/osxcross-mac" \
             ./build.sh
-          find toolchain/osxcross-mac-target/bin -maxdepth 1 -name '*-clang' -type f | sort
-
-      - name: Verify x86_64 and arm64 clangs
-        id: verify
-        run: |
-          BIN="$GITHUB_WORKSPACE/toolchain/osxcross-mac-target/bin"
-          # osxcross names the clangs <arch>-apple-darwin<ver>-clang. The
-          # exact darwin version suffix varies by osxcross commit, so
-          # discover it with a glob (no ls).
+          echo "Verifying x86_64 and arm64 clangs"
+          BIN="$GITHUB_WORKSPACE/toolchain/osxcross-mac/bin"
           X64_CC=""
           ARM_CC=""
           for f in "$BIN"/x86_64-apple-darwin*-clang; do
@@ -206,85 +222,54 @@ jobs:
           test -n "$ARM_CC" || { echo "FAIL: no arm64 clang in $BIN"; exit 1; }
           "$X64_CC" --version
           "$ARM_CC" --version
-          test -d "$GITHUB_WORKSPACE/toolchain/osxcross-mac-target/SDK/MacOSX11.3.sdk" \
+          test -d "$GITHUB_WORKSPACE/toolchain/osxcross-mac/SDK/MacOSX11.3.sdk" \
             && echo "11.3 SDK staged in toolchain dir"
-          {
-            echo "X64_CC=$X64_CC"
-            echo "ARM_MAC_CC=$ARM_CC"
-          } >> "$GITHUB_OUTPUT"
+          echo "macOS toolchain built."
 
-      - name: Cache toolchain
-        if: always()
+      - name: Cache macOS toolchain (save)
+        if: steps.mac-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: toolchain/osxcross-mac-target
+          path: toolchain/osxcross-mac
           key: osxcross-mac-master-stable-11.3
 
-      - name: Upload mac-toolchain artifact
-        uses: actions/upload-artifact@v4
+      # -------------------------------------------------------------------
+      # 7. Build iOS armv7+arm64 toolchain (cctools-port, iPhoneOS8.4 SDK)
+      # -------------------------------------------------------------------
+      - name: Cache iOS toolchain (restore)
+        id: ios-cache
+        uses: actions/cache/restore@v4
         with:
-          name: mac-toolchain
-          path: toolchain/osxcross-mac-target
-          if-no-files-found: error
+          path: toolchain/ios-toolchain
+          key: cctools-port-ios-8.4
+          fail-on-cache-miss: false
 
-      - name: Upload sdk-11.3 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sdk-11.3
-          path: toolchain/osxcross-mac-target/SDK/MacOSX11.3.sdk
-          if-no-files-found: error
-
-  # =========================================================================
-  # 4. iOS toolchain (cctools-port usage_examples/ios_toolchain, 8.4 SDK)
-  # =========================================================================
-  toolchain-ios:
-    name: toolchain-ios (cctools-port, iPhoneOS 8.4)
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - name: Install dependencies
+      - name: Build iOS toolchain (cctools-port, iPhoneOS 8.4)
+        if: steps.ios-cache.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential clang g++ cmake ninja-build \
-            libblocksruntime-dev libxml2-dev \
-            libssl-dev git curl ca-certificates xz-utils libffi-dev
-
-      - name: Clone cctools-port
-        run: |
+          set -e
+          echo "=== Step 7: Build iOS armv7+arm64 toolchain (cctools-port, iPhoneOS 8.4) ==="
+          echo "Cloning cctools-port"
           git clone https://github.com/tpoechtrager/cctools-port.git toolchain/cctools-port
           cd toolchain/cctools-port && git log -1 --oneline
-
-      - name: Download iPhoneOS8.4 SDK
-        run: |
-          echo "Downloading secret ALTIVEC_SDK_IPHONEOS_84_URL -> toolchain/iPhoneOS8.4.sdk.tar.gz"
-          curl -fsSL --retry 3 -o toolchain/iPhoneOS8.4.sdk.tar.gz "$ALTIVEC_SDK_IPHONEOS_84_URL"
-          ls -l toolchain/iPhoneOS8.4.sdk.tar.gz
-
-      - name: Build apple-libtapi (needed for .tbd stubs)
-        run: |
+          echo "Building apple-libtapi (needed for .tbd stubs)"
           git clone --branch 1300.6.5 https://github.com/tpoechtrager/apple-libtapi.git toolchain/apple-libtapi
           cd toolchain/apple-libtapi
           INSTALLPREFIX="$GITHUB_WORKSPACE/toolchain/ios-toolchain" ./build.sh
           INSTALLPREFIX="$GITHUB_WORKSPACE/toolchain/ios-toolchain" ./install.sh
-
-      - name: Build iOS toolchain (armv7 target)
-        run: |
+          echo "Building iOS toolchain (armv7 target)"
           cd toolchain/cctools-port
           LLVM_DSYMUTIL=llvm-dsymutil \
           JOBS=$(nproc) \
           ./usage_examples/ios_toolchain/build.sh \
-            "$GITHUB_WORKSPACE/toolchain/iPhoneOS8.4.sdk.tar.gz" armv7
-          find toolchain/cctools-port/usage_examples/ios_toolchain/target/bin -maxdepth 1 \( -type f -o -type l \) | sort | head -20
-
-      - name: Verify iOS toolchain + armv7 link test
-        run: |
+            "$GITHUB_WORKSPACE/sdk/iPhoneOS8.4.sdk.tar.gz" armv7
+          echo "Verifying iOS toolchain"
           BIN="$GITHUB_WORKSPACE/toolchain/cctools-port/usage_examples/ios_toolchain/target/bin"
-          SDK="$BIN/SDK/iPhoneOS8.4.sdk"
+          SDK="$GITHUB_WORKSPACE/toolchain/cctools-port/usage_examples/ios_toolchain/target/SDK/iPhoneOS8.4.sdk"
           test -x "$BIN/arm-apple-darwin11-clang"
           "$BIN/arm-apple-darwin11-clang" --version
           test -d "$SDK" && echo "iPhoneOS8.4 SDK staged"
-          # Prove armv7 linking works end to end.
+          echo "Proving armv7 COMPILE AND LINK"
           printf 'int main(void){return 0;}\n' > /tmp/ios_link_test.c
           "$BIN/arm-apple-darwin11-clang" \
             -arch armv7 -miphoneos-version-min=5.0 \
@@ -292,103 +277,86 @@ jobs:
             -o /tmp/ios_link_test /tmp/ios_link_test.c
           "$BIN/arm-apple-darwin11-lipo" -info /tmp/ios_link_test
           echo "armv7 link test OK"
+          echo "iOS toolchain built."
 
-      - name: Cache toolchain
-        if: always()
+      - name: Cache iOS toolchain (save)
+        if: steps.ios-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: toolchain/cctools-port/usage_examples/ios_toolchain/target
           key: cctools-port-ios-8.4
 
-      - name: Upload ios-toolchain artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-toolchain
-          path: toolchain/cctools-port/usage_examples/ios_toolchain/target
-          if-no-files-found: error
-
-      - name: Upload sdk-iphoneos-8.4 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sdk-iphoneos-8.4
-          path: toolchain/cctools-port/usage_examples/ios_toolchain/target/SDK/iPhoneOS8.4.sdk
-          if-no-files-found: error
-
-  # =========================================================================
-  # 5. Build all slices + fat binaries
-  # =========================================================================
-  build:
-    name: build (all slices + fat binaries)
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    needs: [toolchain-ppc, toolchain-i386, toolchain-mac, toolchain-ios]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download all toolchain artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: toolchain-artifacts
-
-      - name: Assemble toolchains
-        run: |
-          set -e
-          mkdir -p toolchain
-          # ppc (danupsher)
-          cp -r toolchain-artifacts/ppc-toolchain/. toolchain/
-          # i386 (osxcross-1.1)
-          cp -r toolchain-artifacts/i386-toolchain toolchain/osxcross-i386-target
-          # mac (osxcross master)
-          cp -r toolchain-artifacts/mac-toolchain toolchain/osxcross-mac-target
-          # ios (cctools-port)
-          cp -r toolchain-artifacts/ios-toolchain toolchain/ios-toolchain
-          echo "=== assembled toolchain/ tree (top 2 levels) ==="
-          find toolchain -maxdepth 2 | sort | head -40
-
+      # -------------------------------------------------------------------
+      # 8. Resolve toolchain binary paths into env vars for the Makefile
+      # -------------------------------------------------------------------
       - name: Resolve toolchain paths
         id: paths
         run: |
           set -e
-          BIN_MAC="$GITHUB_WORKSPACE/toolchain/osxcross-mac-target/bin"
+          echo "=== Step 8: Resolve toolchain paths ==="
+          WS="$GITHUB_WORKSPACE"
+          PPC_XC="$WS/toolchain/$PPC_INSTALL_DIR"
+          I386_BIN="$WS/toolchain/osxcross-i386/bin"
+          I386_CC="$I386_BIN/i386-apple-darwin9-clang"
+          I386_SDK="$WS/toolchain/osxcross-i386/SDK/MacOSX10.5.sdk"
+          I386_LIPO="$I386_BIN/i386-apple-darwin9-lipo"
+          MAC_BIN="$WS/toolchain/osxcross-mac/bin"
+          MAC_SDK="$WS/toolchain/osxcross-mac/SDK/MacOSX11.3.sdk"
+          IOS_BIN="$WS/toolchain/cctools-port/usage_examples/ios_toolchain/target/bin"
+          IOS_SDK="$WS/toolchain/cctools-port/usage_examples/ios_toolchain/target/SDK/iPhoneOS8.4.sdk"
+          IOS_CC="$IOS_BIN/arm-apple-darwin11-clang"
+          # Discover osxcross x86_64/arm64 clang/vtool/otool via glob
+          # (darwin suffix varies, e.g. darwin20.4).
           X64_CC=""
           ARM_MAC_CC=""
           VTOOL=""
           OTOOL=""
-          for f in "$BIN_MAC"/x86_64-apple-darwin*-clang; do
+          for f in "$MAC_BIN"/x86_64-apple-darwin*-clang; do
             [ -x "$f" ] && X64_CC="$f" && break
           done
-          for f in "$BIN_MAC"/arm64-apple-darwin*-clang; do
+          for f in "$MAC_BIN"/arm64-apple-darwin*-clang; do
             [ -x "$f" ] && ARM_MAC_CC="$f" && break
           done
-          for f in "$BIN_MAC"/x86_64-apple-darwin*-vtool; do
+          for f in "$MAC_BIN"/x86_64-apple-darwin*-vtool; do
             [ -x "$f" ] && VTOOL="$f" && break
           done
-          for f in "$BIN_MAC"/x86_64-apple-darwin*-otool; do
+          for f in "$MAC_BIN"/x86_64-apple-darwin*-otool; do
             [ -x "$f" ] && OTOOL="$f" && break
           done
-          test -n "$X64_CC" && test -n "$ARM_MAC_CC"
-          test -n "$VTOOL" && test -n "$OTOOL"
+          test -n "$X64_CC" || { echo "FAIL: no x86_64 clang in $MAC_BIN"; exit 1; }
+          test -n "$ARM_MAC_CC" || { echo "FAIL: no arm64 clang in $MAC_BIN"; exit 1; }
+          test -n "$VTOOL" || { echo "FAIL: no vtool in $MAC_BIN"; exit 1; }
+          test -n "$OTOOL" || { echo "FAIL: no otool in $MAC_BIN"; exit 1; }
+          echo "Discovered: X64_CC=$X64_CC"
+          echo "Discovered: ARM_MAC_CC=$ARM_MAC_CC"
+          echo "Discovered: VTOOL=$VTOOL"
+          echo "Discovered: OTOOL=$OTOOL"
           {
-            echo "PPC_XC=$GITHUB_WORKSPACE/toolchain/$PPC_INSTALL_DIR"
-            echo "I386_CC=$GITHUB_WORKSPACE/toolchain/osxcross-i386-target/bin/i386-apple-darwin9-clang"
-            echo "I386_SDK=$GITHUB_WORKSPACE/toolchain/osxcross-i386-target/SDK/MacOSX10.5.sdk"
+            echo "PPC_XC=$PPC_XC"
+            echo "PPC_CC=$PPC_XC/bin/ppc-ld64-gcc"
+            echo "PPC_SDK=$PPC_XC/sdk/MacOSX10.4u.sdk"
+            echo "I386_CC=$I386_CC"
+            echo "I386_SDK=$I386_SDK"
             echo "X64_CC=$X64_CC"
             echo "ARM_MAC_CC=$ARM_MAC_CC"
-            echo "MAC_SDK_NEW=$GITHUB_WORKSPACE/toolchain/osxcross-mac-target/SDK/MacOSX11.3.sdk"
-            echo "IOS_CC=$GITHUB_WORKSPACE/toolchain/ios-toolchain/bin/arm-apple-darwin11-clang"
-            echo "IOS_SDK=$GITHUB_WORKSPACE/toolchain/ios-toolchain/SDK/iPhoneOS8.4.sdk"
-            # The legacy osxcross-1.1 lipo is PPC-capable (built for the
-            # 10.4/10.5 era); the modern lipo may reject ppc. Use legacy.
-            echo "LIPO=$GITHUB_WORKSPACE/toolchain/osxcross-i386-target/bin/i386-apple-darwin9-lipo"
+            echo "MAC_SDK_NEW=$MAC_SDK"
+            echo "IOS_CC=$IOS_CC"
+            echo "IOS_SDK=$IOS_SDK"
+            # Use the legacy osxcross-1.1 lipo (PPC-capable) for fat creation.
+            echo "LIPO=$I386_LIPO"
             echo "VTOOL=$VTOOL"
             echo "OTOOL=$OTOOL"
-            echo "LDID=$GITHUB_WORKSPACE/toolchain/ios-toolchain/bin/ldid"
+            echo "LDID=$IOS_BIN/ldid"
           } >> "$GITHUB_OUTPUT"
 
+      # -------------------------------------------------------------------
+      # 9. Build all slices + fat binaries
+      # -------------------------------------------------------------------
       - name: Build all slices + fat binaries
         env:
           PPC_XC: ${{ steps.paths.outputs.PPC_XC }}
+          PPC_CC: ${{ steps.paths.outputs.PPC_CC }}
+          PPC_SDK: ${{ steps.paths.outputs.PPC_SDK }}
           I386_CC: ${{ steps.paths.outputs.I386_CC }}
           I386_SDK: ${{ steps.paths.outputs.I386_SDK }}
           X64_CC: ${{ steps.paths.outputs.X64_CC }}
@@ -401,30 +369,32 @@ jobs:
           OTOOL: ${{ steps.paths.outputs.OTOOL }}
           LDID: ${{ steps.paths.outputs.LDID }}
         run: |
-          echo "=== make all (all 6 slices + 2 fat binaries) ==="
+          set -e
+          echo "=== Step 9: make all (6 slices + 2 fat binaries) ==="
           make all
 
-      - name: Validate (manifest + per-slice min-OS)
+      # -------------------------------------------------------------------
+      # 10. Validate (lipo -info + arch-set assertion + per-slice min-OS)
+      # -------------------------------------------------------------------
+      - name: Validate (arch sets + min-OS)
         env:
           LIPO: ${{ steps.paths.outputs.LIPO }}
           VTOOL: ${{ steps.paths.outputs.VTOOL }}
           OTOOL: ${{ steps.paths.outputs.OTOOL }}
+          PPC_XC: ${{ steps.paths.outputs.PPC_XC }}
         run: |
+          set -e
+          echo "=== Step 10: make validate ==="
           make validate
           echo "=== build/manifest.txt ==="
           cat build/manifest.txt
 
-      - name: Assert exact arch sets
-        env:
-          LIPO: ${{ steps.paths.outputs.LIPO }}
-        run: |
-          set -e
-          echo "=== lipo -info dist/fizzbuzz-macos ==="
-          MAC_INFO=$("$LIPO" -info dist/fizzbuzz-macos)
-          printf '%s\n' "$MAC_INFO"
-          echo "=== lipo -info dist/fizzbuzz-ios ==="
-          IOS_INFO=$("$LIPO" -info dist/fizzbuzz-ios)
-          printf '%s\n' "$IOS_INFO"
+          echo ""
+          echo "=== HARD arch-set assertion ==="
+          echo "--- lipo -info dist/fizzbuzz-macos ---"
+          "$LIPO" -info dist/fizzbuzz-macos
+          echo "--- lipo -info dist/fizzbuzz-ios ---"
+          "$LIPO" -info dist/fizzbuzz-ios
 
           #
           # Verify the EXACT arch set by reading each thin slice's Mach-O
@@ -439,7 +409,7 @@ jobs:
 
           def thin_cputype(path):
               with open(path, "rb") as f:
-                  d = f.read(16)          # magic + nfat + first arch (partial)
+                  d = f.read(16)
               le_magic = struct.unpack("<I", d[:4])[0]
               if le_magic in (0xFEEDFACE, 0xFEEDFACF):
                   return [struct.unpack("<i", d[4:8])[0]]
@@ -453,17 +423,14 @@ jobs:
               else:
                   raise ValueError("unknown magic %x/%x in %s"
                                    % (be_magic, le_magic, path))
-              # Each fat_arch is 20 bytes: cputype, cpusubtype, offset,
-              # size, align. We only need cputype, so stride by 20 from
-              # the start of the arch table (offset 8).
               with open(path, "rb") as f:
                   f.seek(8)
                   cts = []
                   for _ in range(nfat):
                       ct, _cs = struct.unpack(endian + "II", f.read(8))
-                      f.read(12)               # skip offset, size, align
+                      f.read(12)
                       cts.append(ct)
-              return cts
+                  return cts
 
           CPU_TYPE = {18: "ppc", 7: "i386", 16777223: "x86_64",
                       16777228: "arm64", 12: "arm"}
@@ -480,19 +447,26 @@ jobs:
               print("  OK: %s has exactly %s" % (fat_path, want))
 
           check_fat("dist/fizzbuzz-macos", ["ppc", "i386", "x86_64", "arm64"])
-          check_fat("dist/fizzbuzz-ios", ["arm", "arm64"])  # armv7 -> CPU_TYPE_ARM(12)
+          check_fat("dist/fizzbuzz-ios", ["arm", "arm64"])
           print("=== arch sets OK ===")
           PY
 
-      - name: Per-slice min-OS report
-        env:
-          VTOOL: ${{ steps.paths.outputs.VTOOL }}
-          OTOOL: ${{ steps.paths.outputs.OTOOL }}
-          PPC_XC: ${{ steps.paths.outputs.PPC_XC }}
-        run: |
-          set -e
+          echo ""
+          echo "=== Per-slice min-OS report ==="
           bash scripts/report_minos.sh build/slices
 
+      # -------------------------------------------------------------------
+      # 11. Host test
+      # -------------------------------------------------------------------
+      - name: Host test
+        run: |
+          set -e
+          echo "=== Step 11: make test-host ==="
+          make test-host
+
+      # -------------------------------------------------------------------
+      # 12. Upload artifacts (ONLY the two tiny fat binaries + manifest)
+      # -------------------------------------------------------------------
       - name: Upload fizzbuzz-macos
         uses: actions/upload-artifact@v4
         with:
@@ -514,110 +488,11 @@ jobs:
           path: build/manifest.txt
           if-no-files-found: error
 
-  # =========================================================================
-  # 6. Test (host test + re-validate fat binaries)
-  # =========================================================================
-  test:
-    name: test (host test + re-validate fat binaries)
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    needs: [build]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download fat artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: fizzbuzz-macos
-          path: dist
-
-      - name: Download fizzbuzz-ios
-        uses: actions/download-artifact@v4
-        with:
-          name: fizzbuzz-ios
-          path: dist
-
-      - name: Download build-manifest
-        uses: actions/download-artifact@v4
-        with:
-          name: build-manifest
-          path: build
-
-      - name: Download i386 toolchain (for PPC-capable lipo)
-        uses: actions/download-artifact@v4
-        with:
-          name: i386-toolchain
-          path: toolchain/i386-toolchain
-
-      - name: Run host test
+      # -------------------------------------------------------------------
+      # Final summary
+      # -------------------------------------------------------------------
+      - name: Final summary
         run: |
-          make test-host
-
-      - name: Re-validate fat binaries
-        env:
-          LIPO: ${{ github.workspace }}/toolchain/i386-toolchain/bin/i386-apple-darwin9-lipo
-        run: |
-          set -e
-          echo "=== fizzbuzz-macos ==="
-          ls -l dist/fizzbuzz-macos
-          [ -s dist/fizzbuzz-macos ] || { echo "FAIL: fizzbuzz-macos is empty"; exit 1; }
-          "$LIPO" -info dist/fizzbuzz-macos
-
-          echo "=== fizzbuzz-ios ==="
-          ls -l dist/fizzbuzz-ios
-          [ -s dist/fizzbuzz-ios ] || { echo "FAIL: fizzbuzz-ios is empty"; exit 1; }
-          "$LIPO" -info dist/fizzbuzz-ios
-
-          # Verify the exact arch set via cputype (ground truth). See the
-          # build job's "Assert exact arch sets" step for the rationale
-          # (ppc ALL slices are labeled ppc603 by lipo).
-          python3 - <<'PY'
-          import struct, sys
-
-          def thin_cputype(path):
-              with open(path, "rb") as f:
-                  d = f.read(16)
-              le_magic = struct.unpack("<I", d[:4])[0]
-              if le_magic in (0xFEEDFACE, 0xFEEDFACF):
-                  return [struct.unpack("<i", d[4:8])[0]]
-              be_magic = struct.unpack(">I", d[:4])[0]
-              if be_magic == 0xCAFEBABE:
-                  nfat = struct.unpack(">I", d[4:8])[0]
-                  endian = ">"
-              elif le_magic == 0xBEBAFECA:
-                  nfat = struct.unpack("<I", d[4:8])[0]
-                  endian = "<"
-              else:
-                  raise ValueError("unknown magic %x/%x in %s"
-                                   % (be_magic, le_magic, path))
-              with open(path, "rb") as f:
-                  f.seek(8)
-                  cts = []
-                  for _ in range(nfat):
-                      ct, _cs = struct.unpack(endian + "II", f.read(8))
-                      f.read(12)
-                      cts.append(ct)
-              return cts
-
-          CPU_TYPE = {18: "ppc", 7: "i386", 16777223: "x86_64",
-                      16777228: "arm64", 12: "arm"}
-
-          def check_fat(fat_path, expected):
-              cts = thin_cputype(fat_path)
-              names = sorted(CPU_TYPE.get(c, str(c)) for c in cts)
-              want = sorted(expected)
-              print("  %s: %s" % (fat_path, names))
-              if names != want:
-                  print("FAIL: %s arch set %s != expected %s"
-                        % (fat_path, names, want))
-                  sys.exit(1)
-
-          check_fat("dist/fizzbuzz-macos", ["ppc", "i386", "x86_64", "arm64"])
-          check_fat("dist/fizzbuzz-ios", ["arm", "arm64"])
-          print("=== re-validate arch sets OK ===")
-          PY
-
           echo ""
           echo "=== FINAL SUMMARY ==="
           echo "macOS Quad-Fat: ppc i386 x86_64 arm64  (min-OS 10.4/10.5/10.9/11.0)"
