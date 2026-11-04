@@ -27,7 +27,6 @@ env:
   # (GCC 7.5 + ld64 + cctools + 10.4u SDK). Has a working assembler.
   PPC_TARBALL_URL: https://github.com/danupsher/tiger-ppc-builds/releases/download/cross-compiler-1.0/ppc-tiger-xcompiler.tar.gz
   PPC_TARBALL: ppc-tiger-xcompiler.tar.gz
-  PPC_INSTALL_DIR: ""
 
 jobs:
   build-and-test:
@@ -126,12 +125,12 @@ jobs:
           echo "Extracting toolchain/$PPC_TARBALL -> toolchain/"
           tar xzf "toolchain/$PPC_TARBALL" -C toolchain
           rm -f "toolchain/$PPC_TARBALL"
-          ls -l "toolchain/$PPC_INSTALL_DIR"
+          ls -l "toolchain"
           echo "Verifying ppc-tiger-gcc"
-          chmod +x "toolchain/$PPC_INSTALL_DIR/bin/ppc-tiger-gcc" 2>/dev/null || true
-          chmod +x "toolchain/$PPC_INSTALL_DIR/bin/ppc-ld64-gcc" 2>/dev/null || true
-          "toolchain/$PPC_INSTALL_DIR/bin/ppc-tiger-gcc" --version 2>&1 | head -1
-          test -d "toolchain/$PPC_INSTALL_DIR/sdk/MacOSX10.4u.sdk" \
+          chmod +x "toolchain/bin/ppc-tiger-gcc" 2>/dev/null || true
+          chmod +x "toolchain/bin/ppc-ld64-gcc" 2>/dev/null || true
+          "toolchain/bin/ppc-tiger-gcc" --version 2>&1 | head -1
+          test -d "toolchain/sdk/MacOSX10.4u.sdk" \
             && echo "10.4u SDK present"
           echo "PPC toolchain built."
 
@@ -320,7 +319,7 @@ jobs:
           set -e
           echo "=== Step 8: Resolve toolchain paths ==="
           WS="$GITHUB_WORKSPACE"
-          PPC_XC="$WS/toolchain/$PPC_INSTALL_DIR"
+          PPC_XC="$WS/toolchain"
           I386_BIN="$WS/toolchain/osxcross-i386/bin"
           I386_CC="$I386_BIN/i386-apple-darwin9-clang"
           I386_SDK="$WS/toolchain/osxcross-i386/SDK/MacOSX10.5.sdk"
